@@ -9,5 +9,6 @@ ABAGAIL.jar
 *.ear
 manifest.mf
 /bin
-
+*.iml
+out/
 *.java~
