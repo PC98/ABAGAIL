@@ -86,7 +86,9 @@ def maybe_serialize(file, force=False):
 
     return serialized_file
 
-def train(oa, network, oaName, instances, measure, surpress_output=False, TRAINING_ITERATIONS = 1500):
+def train(oa, network, oaName, instances, measure = SumOfSquaresError(),
+          surpress_output=False,
+          TRAINING_ITERATIONS = 1500):
     """Train a given network on a set of instances.
 
     :param OptimizationAlgorithm oa:
@@ -151,22 +153,15 @@ def evaluate_on_instances(network, instances, type, surpress_output=False):
     else:
         return float(correct)/(correct+incorrect)*100.0
 
+def initialize_networks_and_optimization(networks, nnop, oa, instances,
+                                         factory=BackPropagationNetworkFactory(),
+                                         measure = SumOfSquaresError()):
+    del networks[:]
+    del nnop[:]
+    del oa[:]
 
-def main():
-    """Run algorithms on the pima dataset."""
-    serialized_file = maybe_serialize(INPUT_FILE)
-    train_instances = get_instances(serialized_file, TRAIN)
-
-    factory = BackPropagationNetworkFactory()
-    measure = SumOfSquaresError()
-    data_set = DataSet(train_instances)
-
-    networks = []  # BackPropagationNetwork
-    nnop = []  # NeuralNetworkOptimizationProblem
-    oa = []  # OptimizationAlgorithm
-    oa_names = ["RHC", "SA", "GA"]
-
-    for _ in oa_names:
+    data_set = DataSet(instances)
+    for _ in OA_NAMES:
         classification_network = factory.createClassificationNetwork([
             INPUT_LAYER, HIDDEN_LAYER, OUTPUT_LAYER], LogisticSigmoid())
         networks.append(classification_network)
@@ -176,18 +171,29 @@ def main():
     oa.append(SimulatedAnnealing(1E11, .95, nnop[1]))
     oa.append(StandardGeneticAlgorithm(200, 100, 10, nnop[2]))
 
+def main():
+    """Run algorithms on the pima dataset."""
+    serialized_file = maybe_serialize(INPUT_FILE)
+    train_instances = get_instances(serialized_file, TRAIN)
+
+    networks = []  # BackPropagationNetwork
+    nnop = []  # NeuralNetworkOptimizationProblem
+    oa = []  # OptimizationAlgorithm
+
+    initialize_networks_and_optimization(networks, nnop, oa, train_instances)
+
     learning_curve_data = {}
     learning_curve_file = "learning_curve_data.pickle"
 
     num_iterations_data = {}
     num_iterations_file = "num_iterations_data.pickle"
 
-    for i in xrange(len(oa_names)):
+    for i in xrange(len(OA_NAMES)):
         stdout.write("\n\nTraining and Testing Neural Network using %s\n\n" %
-                     oa_names[i])
+                     OA_NAMES[i])
 
         start = time.time()
-        train(oa[i], networks[i], oa_names[i], train_instances, measure)
+        train(oa[i], networks[i], OA_NAMES[i], train_instances)
         end = time.time()
 
         training_time = end - start
@@ -209,8 +215,9 @@ def main():
             test_accuracy = []
 
             for item in x:
-                train(oa[i], networks[i], oa_names[i], train_instances[:item],
-                      measure, surpress_output=True)
+                initialize_networks_and_optimization(networks, nnop, oa, train_instances[:item])
+                train(oa[i], networks[i], OA_NAMES[i], train_instances[:item],
+                      surpress_output=True)
                 optimal_instance = oa[i].getOptimal()
                 networks[i].setWeights(optimal_instance.getData())
 
@@ -221,7 +228,7 @@ def main():
                                                         test_instances, "Testing",
                                       surpress_output=True))
 
-            learning_curve_data[oa_names[i]] = [train_accuracy, test_accuracy]
+            learning_curve_data[OA_NAMES[i]] = [train_accuracy, test_accuracy]
 
         if not os.path.isfile(num_iterations_file):
             stdout.write("\n\nCalculating num iterations data...\n\n")
@@ -231,8 +238,9 @@ def main():
             test_accuracy = []
 
             for item in x:
-                train(oa[i], networks[i], oa_names[i], train_instances,
-                      measure, surpress_output=True, TRAINING_ITERATIONS=item)
+                initialize_networks_and_optimization(networks, nnop, oa, train_instances)
+                train(oa[i], networks[i], OA_NAMES[i], train_instances,
+                    surpress_output=True, TRAINING_ITERATIONS=item)
                 optimal_instance = oa[i].getOptimal()
                 networks[i].setWeights(optimal_instance.getData())
 
@@ -244,7 +252,7 @@ def main():
                                                            test_instances, "Testing",
                                                            surpress_output=True))
 
-            num_iterations_data[oa_names[i]] = [train_accuracy, test_accuracy]
+            num_iterations_data[OA_NAMES[i]] = [train_accuracy, test_accuracy]
 
     if not os.path.isfile(learning_curve_file):
         with open(learning_curve_file, 'wb') as file:
@@ -272,6 +280,7 @@ if __name__ == "__main__":
     TRAIN_TEST_SPLIT_RATIO = 0.7
     TRAIN = 'train'
     TEST = 'test'
+    OA_NAMES =["RHC", "SA", "GA"]
 
     main()
 
